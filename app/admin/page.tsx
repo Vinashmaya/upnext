@@ -28,6 +28,9 @@ import {
   UserPlus,
   Download,
   Search,
+  Database,
+  CheckCircle,
+  AlertCircle,
 } from "lucide-react"
 
 interface Employee {
@@ -75,11 +78,22 @@ interface NotificationSettings {
   smtpPassword: string
 }
 
+interface StorageHealth {
+  healthy: boolean
+  message: string
+  storage: {
+    type: string
+    location: string
+  }
+  timestamp: string
+}
+
 export default function AdminDashboard() {
   const [systemState, setSystemState] = useState<SystemState | null>(null)
   const [auditLog, setAuditLog] = useState<AuditLogEntry[]>([])
   const [leadAssignments, setLeadAssignments] = useState<LeadAssignment[]>([])
   const [notificationSettings, setNotificationSettings] = useState<NotificationSettings | null>(null)
+  const [storageHealth, setStorageHealth] = useState<StorageHealth | null>(null)
   const [newEmployeeName, setNewEmployeeName] = useState("")
   const [leadSearchTerm, setLeadSearchTerm] = useState("")
   const [isSaving, setIsSaving] = useState(false)
@@ -92,7 +106,7 @@ export default function AdminDashboard() {
   const getInitialTab = () => {
     if (typeof window !== "undefined") {
       const hash = window.location.hash.replace("#", "")
-      if (["management", "notifications", "leads", "audit"].includes(hash)) {
+      if (["management", "notifications", "leads", "audit", "system"].includes(hash)) {
         return hash
       }
     }
@@ -120,6 +134,8 @@ export default function AdminDashboard() {
         fetchLeadAssignments()
       } else if (activeTab === "audit") {
         fetchAuditLog()
+      } else if (activeTab === "system") {
+        fetchStorageHealth()
       }
     }, 3000) // Refresh every 3 seconds
 
@@ -205,11 +221,30 @@ export default function AdminDashboard() {
     }
   }
 
+  const fetchStorageHealth = async () => {
+    try {
+      const response = await fetch("/api/storage/health", {
+        cache: "no-store",
+        headers: {
+          "Cache-Control": "no-cache",
+        },
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        setStorageHealth(data)
+      }
+    } catch (error) {
+      console.error("Failed to fetch storage health:", error)
+    }
+  }
+
   useEffect(() => {
     fetchSystemState()
     fetchAuditLog()
     fetchLeadAssignments()
     fetchNotificationSettings()
+    fetchStorageHealth()
   }, [])
 
   // Listen for hash changes
@@ -439,6 +474,7 @@ export default function AdminDashboard() {
                   fetchAuditLog()
                   fetchLeadAssignments()
                   fetchNotificationSettings()
+                  fetchStorageHealth()
                 }}
                 variant="outline"
                 size="sm"
@@ -478,7 +514,7 @@ export default function AdminDashboard() {
           </Card>
 
           <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
-            <TabsList className="grid w-full grid-cols-4">
+            <TabsList className="grid w-full grid-cols-5">
               <TabsTrigger value="management" className="flex items-center gap-2">
                 <Users className="w-4 h-4" />
                 Employee Management
@@ -494,6 +530,10 @@ export default function AdminDashboard() {
               <TabsTrigger value="audit" className="flex items-center gap-2">
                 <FileText className="w-4 h-4" />
                 Audit Log
+              </TabsTrigger>
+              <TabsTrigger value="system" className="flex items-center gap-2">
+                <Database className="w-4 h-4" />
+                System Status
               </TabsTrigger>
             </TabsList>
 
@@ -989,6 +1029,95 @@ export default function AdminDashboard() {
                       )}
                     </div>
                   </ScrollArea>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="system" className="space-y-6">
+              {/* Storage Health */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Database className="w-5 h-5" />
+                    Storage System Status
+                  </CardTitle>
+                  <p className="text-sm text-gray-600">Monitor the health and status of your data storage</p>
+                </CardHeader>
+                <CardContent>
+                  {storageHealth ? (
+                    <div className="space-y-4">
+                      <div className="flex items-center gap-3">
+                        {storageHealth.healthy ? (
+                          <CheckCircle className="w-6 h-6 text-green-500" />
+                        ) : (
+                          <AlertCircle className="w-6 h-6 text-red-500" />
+                        )}
+                        <div>
+                          <div className="font-semibold">
+                            {storageHealth.healthy ? "Storage Healthy" : "Storage Issues Detected"}
+                          </div>
+                          <div className="text-sm text-gray-600">{storageHealth.message}</div>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4 pt-4 border-t">
+                        <div>
+                          <Label className="text-sm font-medium">Storage Type</Label>
+                          <div className="text-lg font-semibold">{storageHealth.storage.type}</div>
+                        </div>
+                        <div>
+                          <Label className="text-sm font-medium">Location</Label>
+                          <div className="text-sm font-mono bg-gray-100 p-2 rounded">
+                            {storageHealth.storage.location}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="pt-4 border-t">
+                        <Label className="text-sm font-medium">Last Health Check</Label>
+                        <div className="text-sm text-gray-600">{formatTimestamp(storageHealth.timestamp)}</div>
+                      </div>
+
+                      <div className="pt-4 border-t">
+                        <Button onClick={fetchStorageHealth} variant="outline" size="sm">
+                          <RefreshCw className="w-4 h-4 mr-2" />
+                          Run Health Check
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-center py-8 text-gray-500">Loading storage status...</div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* System Information */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Settings className="w-5 h-5" />
+                    System Information
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label className="text-sm font-medium">Environment</Label>
+                      <div className="text-lg">{process.env.NODE_ENV || "development"}</div>
+                    </div>
+                    <div>
+                      <Label className="text-sm font-medium">Platform</Label>
+                      <div className="text-lg">Vercel Serverless</div>
+                    </div>
+                    <div>
+                      <Label className="text-sm font-medium">Data Persistence</Label>
+                      <div className="text-lg">File System</div>
+                    </div>
+                    <div>
+                      <Label className="text-sm font-medium">Auto-refresh</Label>
+                      <div className="text-lg">{autoRefresh ? "Enabled" : "Disabled"}</div>
+                    </div>
+                  </div>
                 </CardContent>
               </Card>
             </TabsContent>

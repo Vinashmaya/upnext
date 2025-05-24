@@ -1,35 +1,9 @@
 import { NextResponse } from "next/server"
-import { promises as fs } from "fs"
-import path from "path"
+import { getNotificationSettings } from "@/lib/storage"
 import nodemailer from "nodemailer"
 
-interface NotificationSettings {
-  emailEnabled: boolean
-  adminEmail: string
-  notifyOnLogin: boolean
-  notifyOnEmployeeRemoval: boolean
-  notifyOnSystemChanges: boolean
-  smtpHost: string
-  smtpPort: number
-  smtpUser: string
-  smtpPassword: string
-}
-
-const DATA_DIR = path.join(process.cwd(), "data")
-const NOTIFICATION_SETTINGS_FILE = path.join(DATA_DIR, "notification-settings.json")
-
-// Read notification settings from file
-async function readNotificationSettings(): Promise<NotificationSettings | null> {
-  try {
-    const data = await fs.readFile(NOTIFICATION_SETTINGS_FILE, "utf-8")
-    return JSON.parse(data)
-  } catch (error) {
-    return null
-  }
-}
-
 // Check if action should trigger notification
-function shouldNotifyForAction(action: string, settings: NotificationSettings): boolean {
+function shouldNotifyForAction(action: string, settings: any): boolean {
   switch (action) {
     case "login":
     case "login_failed":
@@ -164,7 +138,7 @@ export async function POST(request: Request) {
     const { action, details, user, timestamp } = await request.json()
 
     // Read notification settings
-    const settings = await readNotificationSettings()
+    const settings = await getNotificationSettings()
     if (!settings || !settings.emailEnabled) {
       return NextResponse.json({ message: "Email notifications disabled" })
     }

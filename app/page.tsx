@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -10,8 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Navigation } from "@/components/navigation"
-import { useRealTimeUpdates } from "@/hooks/use-real-time-updates"
-import { Users, RotateCcw, Clock, Wifi, WifiOff, UserPlus, CheckCircle, Zap } from "lucide-react"
+import { Users, RotateCcw, Clock, Wifi, WifiOff, UserPlus, CheckCircle } from "lucide-react"
 
 interface Employee {
   id: string
@@ -19,15 +18,57 @@ interface Employee {
   isActive: boolean
 }
 
-export default function MainDisplay() {
-  const { systemState, isConnected, lastUpdated, isRefreshing, refresh } = useRealTimeUpdates({
-    enabled: true,
-    fallbackInterval: 2000,
-  })
+interface SystemState {
+  employees: Employee[]
+  currentUpIndex: number
+  lastUpdated: string
+}
 
+export default function MainDisplay() {
+  const [systemState, setSystemState] = useState<SystemState | null>(null)
+  const [isOnline, setIsOnline] = useState(true)
+  const [lastUpdated, setLastUpdated] = useState<Date>(new Date())
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [leadName, setLeadName] = useState("")
   const [isAssigning, setIsAssigning] = useState(false)
+  const [isRefreshing, setIsRefreshing] = useState(false)
+
+  const fetchSystemState = async () => {
+    try {
+      setIsRefreshing(true)
+      const response = await fetch("/api/system-state", {
+        cache: "no-store",
+        headers: {
+          "Cache-Control": "no-cache",
+        },
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        setSystemState(data)
+        setLastUpdated(new Date())
+        setIsOnline(true)
+      } else {
+        setIsOnline(false)
+      }
+    } catch (error) {
+      console.error("Failed to fetch system state:", error)
+      setIsOnline(false)
+    } finally {
+      setIsRefreshing(false)
+    }
+  }
+
+  // Real-time polling every 2 seconds (changed from 3 seconds)
+  useEffect(() => {
+    fetchSystemState()
+
+    const interval = setInterval(() => {
+      fetchSystemState()
+    }, 2000) // More frequent updates
+
+    return () => clearInterval(interval)
+  }, [])
 
   const cycleToNext = async () => {
     try {
@@ -43,9 +84,7 @@ export default function MainDisplay() {
       })
 
       if (response.ok) {
-        // The real-time updates will handle the refresh automatically
-        // But we can also trigger a manual refresh for immediate feedback
-        setTimeout(refresh, 100)
+        fetchSystemState()
       }
     } catch (error) {
       console.error("Failed to cycle:", error)
@@ -86,8 +125,7 @@ export default function MainDisplay() {
         })
 
         if (cycleResponse.ok) {
-          // Real-time updates will handle the refresh
-          setTimeout(refresh, 100)
+          fetchSystemState()
           setLeadName("")
           setIsModalOpen(false)
         }
@@ -124,16 +162,15 @@ export default function MainDisplay() {
             <h1 className="text-4xl md:text-6xl font-bold text-gray-800 mb-4">Sales Team Up System</h1>
             <div className="flex items-center justify-center gap-4 text-gray-600">
               <div className="flex items-center gap-2">
-                {isConnected ? (
+                {isOnline ? (
                   <div className="flex items-center gap-1">
                     <Wifi className="w-5 h-5 text-green-500" />
                     {isRefreshing && <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />}
-                    <Zap className="w-4 h-4 text-green-500" title="Real-time updates active" />
                   </div>
                 ) : (
                   <WifiOff className="w-5 h-5 text-red-500" />
                 )}
-                <span>{isConnected ? "Live Updates" : "Offline"}</span>
+                <span>{isOnline ? "Connected" : "Offline"}</span>
               </div>
               <div className="flex items-center gap-2">
                 <Clock className="w-5 h-5" />
@@ -278,7 +315,6 @@ export default function MainDisplay() {
                 <CardTitle className="text-2xl flex items-center gap-2">
                   <Users className="w-6 h-6" />
                   Current Queue
-                  {isRefreshing && <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />}
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -286,9 +322,9 @@ export default function MainDisplay() {
                   {systemState?.employees.map((employee, index) => (
                     <div
                       key={employee.id}
-                      className={`p-4 rounded-lg border-2 transition-all duration-300 ${
+                      className={`p-4 rounded-lg border-2 ${
                         index === systemState.currentUpIndex
-                          ? "border-green-500 bg-green-50 shadow-md"
+                          ? "border-green-500 bg-green-50"
                           : "border-gray-200 bg-gray-50"
                       }`}
                     >
@@ -297,9 +333,7 @@ export default function MainDisplay() {
                           {index + 1}. {employee.name}
                         </span>
                         <div className="flex items-center gap-2">
-                          {index === systemState.currentUpIndex && (
-                            <Badge className="bg-green-500 animate-pulse">Current</Badge>
-                          )}
+                          {index === systemState.currentUpIndex && <Badge className="bg-green-500">Current</Badge>}
                           {!employee.isActive && <Badge variant="secondary">Inactive</Badge>}
                         </div>
                       </div>
@@ -333,23 +367,6 @@ export default function MainDisplay() {
                       {systemState.employees.filter((emp) => emp.isActive).length}
                     </p>
                   )}
-                </div>
-
-                {/* Real-time Status */}
-                <div className="text-xs text-center pt-2 border-t">
-                  <div className="flex items-center justify-center gap-2">
-                    {isConnected ? (
-                      <>
-                        <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-                        <span className="text-green-600">Live updates active</span>
-                      </>
-                    ) : (
-                      <>
-                        <div className="w-2 h-2 bg-yellow-500 rounded-full" />
-                        <span className="text-yellow-600">Polling for updates</span>
-                      </>
-                    )}
-                  </div>
                 </div>
               </CardContent>
             </Card>
