@@ -12,14 +12,22 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
-import { LogIn, LogOut, Menu, Users, Bell, FileText, Monitor, Shield, UserPlus } from "lucide-react"
+import { LogIn, LogOut, Menu, Users, Bell, FileText, Monitor, Shield, UserPlus, Clock, User } from "lucide-react"
 
 interface NavigationProps {
   className?: string
 }
 
+interface AuthUser {
+  id: string
+  username: string
+  name: string
+  role: "salesperson" | "bdc" | "manager"
+}
+
 export function Navigation({ className }: NavigationProps) {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [user, setUser] = useState<AuthUser | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const router = useRouter()
   const pathname = usePathname()
@@ -27,16 +35,52 @@ export function Navigation({ className }: NavigationProps) {
   // Check authentication status
   useEffect(() => {
     checkAuthStatus()
-  }, [pathname])
+  }, [])
 
+  // Fix the Navigation component to ensure it doesn't try to load blob resources
   const checkAuthStatus = async () => {
     try {
-      const response = await fetch("/api/auth/check", {
+      console.log("Navigation: Checking auth status...")
+
+      // First try normal cookie-based auth
+      let response = await fetch("/api/auth/check", {
         credentials: "include",
+        cache: "no-store",
       })
-      setIsAuthenticated(response.ok)
+
+      console.log("Navigation: Cookie auth response:", response.status)
+
+      // If cookie auth failed, try with localStorage token
+      if (!response.ok) {
+        const storedToken = localStorage.getItem("auth-token")
+        if (storedToken) {
+          console.log("Navigation: Trying with stored token...")
+          response = await fetch("/api/auth/check", {
+            headers: {
+              Authorization: `Bearer ${storedToken}`,
+            },
+            cache: "no-store",
+          })
+          console.log("Navigation: Token auth response:", response.status)
+        }
+      }
+
+      if (response.ok) {
+        const data = await response.json()
+        console.log("Navigation: Auth successful:", data.user?.name, data.user?.role)
+        setIsAuthenticated(true)
+        setUser(data.user)
+      } else {
+        console.log("Navigation: Auth failed")
+        setIsAuthenticated(false)
+        setUser(null)
+        // Clear stored token if it's invalid
+        localStorage.removeItem("auth-token")
+      }
     } catch (error) {
+      console.error("Navigation: Auth check error:", error)
       setIsAuthenticated(false)
+      setUser(null)
     } finally {
       setIsLoading(false)
     }
@@ -48,53 +92,96 @@ export function Navigation({ className }: NavigationProps) {
         method: "POST",
         credentials: "include",
       })
+
+      // Clear localStorage token
+      localStorage.removeItem("auth-token")
+
       setIsAuthenticated(false)
+      setUser(null)
       router.push("/")
     } catch (error) {
       console.error("Logout failed:", error)
     }
   }
 
-  const navigationItems = [
-    {
-      href: "/",
-      label: "Main Display",
-      icon: Monitor,
-      description: "Live sales rotation display",
-      public: true,
-    },
-    {
-      href: "/admin",
-      label: "Admin Dashboard",
-      icon: Users,
-      description: "Manage employees and settings",
-      public: false,
-    },
-    {
-      href: "/admin#leads",
-      label: "Lead Assignments",
-      icon: UserPlus,
-      description: "View lead assignment history",
-      public: false,
-    },
-    {
-      href: "/admin#notifications",
-      label: "Notifications",
-      icon: Bell,
-      description: "Email alert settings",
-      public: false,
-    },
-    {
-      href: "/admin#audit",
-      label: "Audit Log",
-      icon: FileText,
-      description: "System activity history",
-      public: false,
-    },
-  ]
+  // Define navigation items based on user role
+  const getNavigationItems = () => {
+    const items = [
+      {
+        href: "/",
+        label: "Main Display",
+        icon: Monitor,
+        description: "Live sales rotation display",
+        roles: ["salesperson", "bdc", "manager"], // Available to all authenticated users
+      },
+    ]
 
-  const publicItems = navigationItems.filter((item) => item.public)
-  const adminItems = navigationItems.filter((item) => !item.public)
+    // Items for authenticated users only
+    if (isAuthenticated && user) {
+      // Profile is available to all authenticated users
+      items.push({
+        href: "/profile",
+        label: "My Profile",
+        icon: User,
+        description: "Manage your account",
+        roles: ["salesperson", "bdc", "manager"],
+      })
+
+      // Items for BDC and Manager only
+      if (["bdc", "manager"].includes(user.role)) {
+        items.push(
+          {
+            href: "/admin",
+            label: "Admin Dashboard",
+            icon: Users,
+            description: "Manage employees and settings",
+            roles: ["bdc", "manager"],
+          },
+          {
+            href: "/admin#leads",
+            label: "Lead Assignments",
+            icon: UserPlus,
+            description: "View lead assignment history",
+            roles: ["bdc", "manager"],
+          },
+          {
+            href: "/admin#notifications",
+            label: "Notifications",
+            icon: Bell,
+            description: "Email alert settings",
+            roles: ["bdc", "manager"],
+          },
+          {
+            href: "/admin#audit",
+            label: "Audit Log",
+            icon: FileText,
+            description: "System activity history",
+            roles: ["bdc", "manager"],
+          },
+        )
+      }
+
+      // Items for Manager only
+      if (user.role === "manager") {
+        items.push({
+          href: "/admin/users",
+          label: "User Management",
+          icon: Shield,
+          description: "Manage system users",
+          roles: ["manager"],
+        })
+      }
+    }
+
+    // Filter items based on user role
+    return items.filter((item) => !user || item.roles.includes(user.role))
+  }
+
+  const navigationItems = getNavigationItems()
+  const publicItems = navigationItems.filter((item) => !isAuthenticated || item.roles.includes("salesperson"))
+  const adminItems = navigationItems.filter(
+    (item) => isAuthenticated && user && ["bdc", "manager"].includes(user.role) && !item.roles.includes("salesperson"),
+  )
 
   const isCurrentPage = (href: string) => {
     if (href === "/") return pathname === "/"
@@ -131,27 +218,28 @@ export function Navigation({ className }: NavigationProps) {
 
           {/* Desktop Navigation */}
           <div className="hidden md:flex items-center space-x-4">
-            {/* Public Navigation Items */}
+            {/* Main Navigation Items */}
             {publicItems.map((item) => {
               const Icon = item.icon
               return (
-                <Link
+                <Button
                   key={item.href}
-                  href={item.href}
+                  variant="ghost"
                   className={`flex items-center space-x-1 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
                     isCurrentPage(item.href)
                       ? "bg-blue-100 text-blue-700"
                       : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
                   }`}
+                  onClick={() => router.push(item.href)}
                 >
                   <Icon className="w-4 h-4" />
                   <span>{item.label}</span>
-                </Link>
+                </Button>
               )
             })}
 
-            {/* Admin Dropdown */}
-            {isAuthenticated && (
+            {/* Admin Dropdown - Only for BDC and Manager */}
+            {isAuthenticated && user && ["bdc", "manager"].includes(user.role) && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button
@@ -167,13 +255,16 @@ export function Navigation({ className }: NavigationProps) {
                     const Icon = item.icon
                     return (
                       <DropdownMenuItem key={item.href} asChild>
-                        <Link href={item.href} className="flex items-center space-x-2 w-full">
+                        <button
+                          onClick={() => router.push(item.href)}
+                          className="flex items-center space-x-2 w-full text-left"
+                        >
                           <Icon className="w-4 h-4" />
                           <div>
                             <div className="font-medium">{item.label}</div>
                             <div className="text-xs text-gray-500">{item.description}</div>
                           </div>
-                        </Link>
+                        </button>
                       </DropdownMenuItem>
                     )
                   })}
@@ -186,14 +277,58 @@ export function Navigation({ className }: NavigationProps) {
               </DropdownMenu>
             )}
 
+            {/* User Status */}
+            {isAuthenticated && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" className="flex items-center space-x-1">
+                    <User className="w-4 h-4" />
+                    <span>{user!.name}</span>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  <div className="px-2 py-1.5">
+                    <div className="font-medium">{user!.name}</div>
+                    <div className="text-xs text-gray-500">
+                      Role: <span className="capitalize">{user!.role}</span>
+                    </div>
+                  </div>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem asChild>
+                    <button
+                      onClick={() => router.push("/profile")}
+                      className="flex items-center space-x-2 w-full text-left"
+                    >
+                      <User className="w-4 h-4" />
+                      <span>My Profile</span>
+                    </button>
+                  </DropdownMenuItem>
+                  {user!.role === "salesperson" && (
+                    <DropdownMenuItem asChild>
+                      <button
+                        onClick={() => router.push("/profile#availability")}
+                        className="flex items-center space-x-2 w-full text-left"
+                      >
+                        <Clock className="w-4 h-4" />
+                        <span>Set Availability</span>
+                      </button>
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={handleLogout} className="flex items-center space-x-2 text-red-600">
+                    <LogOut className="w-4 h-4" />
+                    <span>Logout</span>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+
             {/* Login Button */}
             {!isAuthenticated && (
-              <Link href="/login">
-                <Button variant="outline" className="flex items-center space-x-1">
-                  <LogIn className="w-4 h-4" />
-                  <span>Admin Login</span>
-                </Button>
-              </Link>
+              <Button variant="outline" className="flex items-center space-x-1" onClick={() => router.push("/login")}>
+                <LogIn className="w-4 h-4" />
+                <span>Login</span>
+              </Button>
             )}
           </div>
 
@@ -215,16 +350,24 @@ export function Navigation({ className }: NavigationProps) {
                     <span className="text-xl font-bold text-gray-900">Sales Up System</span>
                   </div>
 
-                  {/* Public Items */}
+                  {/* User Info */}
+                  {isAuthenticated && (
+                    <div className="p-3 bg-blue-50 rounded-lg">
+                      <div className="font-medium text-blue-900">{user!.name}</div>
+                      <div className="text-sm text-blue-700 capitalize">{user!.role}</div>
+                    </div>
+                  )}
+
+                  {/* Navigation Items */}
                   <div className="space-y-2">
                     <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider">Navigation</h3>
-                    {publicItems.map((item) => {
+                    {navigationItems.map((item) => {
                       const Icon = item.icon
                       return (
-                        <Link
+                        <button
                           key={item.href}
-                          href={item.href}
-                          className={`flex items-center space-x-3 px-3 py-2 rounded-md transition-colors ${
+                          onClick={() => router.push(item.href)}
+                          className={`flex items-center space-x-3 px-3 py-2 rounded-md transition-colors w-full text-left ${
                             isCurrentPage(item.href)
                               ? "bg-blue-100 text-blue-700"
                               : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
@@ -235,37 +378,10 @@ export function Navigation({ className }: NavigationProps) {
                             <div className="font-medium">{item.label}</div>
                             <div className="text-xs text-gray-500">{item.description}</div>
                           </div>
-                        </Link>
+                        </button>
                       )
                     })}
                   </div>
-
-                  {/* Admin Items */}
-                  {isAuthenticated && (
-                    <div className="space-y-2">
-                      <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider">Administration</h3>
-                      {adminItems.map((item) => {
-                        const Icon = item.icon
-                        return (
-                          <Link
-                            key={item.href}
-                            href={item.href}
-                            className={`flex items-center space-x-3 px-3 py-2 rounded-md transition-colors ${
-                              isCurrentPage(item.href)
-                                ? "bg-blue-100 text-blue-700"
-                                : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
-                            }`}
-                          >
-                            <Icon className="w-5 h-5" />
-                            <div>
-                              <div className="font-medium">{item.label}</div>
-                              <div className="text-xs text-gray-500">{item.description}</div>
-                            </div>
-                          </Link>
-                        )
-                      })}
-                    </div>
-                  )}
 
                   {/* Authentication */}
                   <div className="pt-4 border-t">
@@ -279,12 +395,14 @@ export function Navigation({ className }: NavigationProps) {
                         <span>Logout</span>
                       </Button>
                     ) : (
-                      <Link href="/login" className="block">
-                        <Button variant="outline" className="w-full flex items-center space-x-2">
-                          <LogIn className="w-4 h-4" />
-                          <span>Admin Login</span>
-                        </Button>
-                      </Link>
+                      <Button
+                        variant="outline"
+                        className="w-full flex items-center space-x-2"
+                        onClick={() => router.push("/login")}
+                      >
+                        <LogIn className="w-4 h-4" />
+                        <span>Login</span>
+                      </Button>
                     )}
                   </div>
                 </div>

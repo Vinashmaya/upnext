@@ -1,0 +1,10 @@
+{
+  "employees": [
+    { "id": "1", "name": "John Smith", "isActive": true },
+    { "id": "2", "name": "Sarah Johnson", "isActive": true },
+    { "id": "3", "name": "Mike Davis", "isActive": true },
+    { "id": "4", "name": "Emily Brown", "isActive": true }
+  ],
+  "currentUpIndex": 0,
+  "lastUpdated": "2025-06-06T12:00:00.000Z"
+}
