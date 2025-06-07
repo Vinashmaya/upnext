@@ -41,38 +41,28 @@ export function Navigation({ className }: NavigationProps) {
 
   const checkAuthStatus = async () => {
     try {
-      console.log("Navigation: Checking auth status...")
-
-      // First try normal cookie-based auth
       let response = await fetch("/api/auth/check", {
         credentials: "include",
         cache: "no-store",
       })
 
-      console.log("Navigation: Cookie auth response:", response.status)
-
-      // If cookie auth failed, try with localStorage token
       if (!response.ok) {
         const storedToken = localStorage.getItem("auth-token")
         if (storedToken) {
-          console.log("Navigation: Trying with stored token...")
           response = await fetch("/api/auth/check", {
             headers: {
               Authorization: `Bearer ${storedToken}`,
             },
             cache: "no-store",
           })
-          console.log("Navigation: Token auth response:", response.status)
         }
       }
 
       if (response.ok) {
         const data = await response.json()
-        console.log("Navigation: Auth successful:", data.user?.name, data.user?.role)
         setIsAuthenticated(true)
         setUser(data.user)
       } else {
-        console.log("Navigation: Auth failed")
         setIsAuthenticated(false)
         setUser(null)
         // Clear stored token if it's invalid
@@ -310,9 +300,6 @@ export function Navigation({ className }: NavigationProps) {
                 <DropdownMenuContent align="end" className="w-56">
                   <div className="px-2 py-1.5">
                     <div className="font-medium">{user!.name}</div>
-                    <div className="text-xs text-gray-500 dark:text-gray-400">
-                      Role: <span className="capitalize">{user!.role}</span>
-                    </div>
                   </div>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem asChild>

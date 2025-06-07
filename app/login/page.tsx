@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Navigation } from "@/components/navigation"
 import { ClientOnly } from "@/components/client-only"
-import { Lock, User, AlertCircle, Info } from "lucide-react"
+import { Lock, User, AlertCircle } from "lucide-react"
 
 export default function LoginPage() {
   const [username, setUsername] = useState("")
@@ -18,7 +18,6 @@ export default function LoginPage() {
   const [error, setError] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [isInitializing, setIsInitializing] = useState(true)
-  const [debugInfo, setDebugInfo] = useState("")
   const [mounted, setMounted] = useState(false)
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -112,7 +111,6 @@ export default function LoginPage() {
     e.preventDefault()
     setIsLoading(true)
     setError("")
-    setDebugInfo("")
 
     try {
       console.log("Attempting login for:", username)
@@ -172,19 +170,6 @@ export default function LoginPage() {
     }
 
     setIsLoading(false)
-  }
-
-  const handleDebugAuth = async () => {
-    try {
-      const response = await fetch("/api/auth/debug", {
-        credentials: "include",
-      })
-      const data = await response.json()
-      setDebugInfo(JSON.stringify(data, null, 2))
-      console.log("Debug auth info:", data)
-    } catch (error) {
-      setDebugInfo(`Debug failed: ${error.message}`)
-    }
   }
 
   const handleSkipToLogin = () => {
@@ -273,33 +258,10 @@ export default function LoginPage() {
                     </div>
                   )}
 
-                  {debugInfo && (
-                    <div className="flex items-start gap-2 text-blue-600 text-xs">
-                      <Info className="w-4 h-4 mt-0.5" />
-                      <pre className="whitespace-pre-wrap">{debugInfo}</pre>
-                    </div>
-                  )}
-
                   <Button type="submit" className="w-full brand-gradient" disabled={isLoading}>
                     {isLoading ? "Signing in..." : "Sign In"}
                   </Button>
-
-                  <Button type="button" onClick={handleDebugAuth} variant="outline" className="w-full" size="sm">
-                    Debug Auth Status
-                  </Button>
                 </form>
-
-                <div className="mt-6 p-4 bg-gray-50 rounded-lg">
-                  <p className="text-sm text-gray-600 text-center">
-                    <strong>Default Credentials:</strong>
-                    <br />
-                    <span className="font-medium">Manager:</span> username: manager / password: manager123
-                    <br />
-                    <span className="font-medium">BDC:</span> username: bdc / password: bdc123
-                    <br />
-                    <span className="font-medium">Salesperson:</span> username: sales1 / password: sales123
-                  </p>
-                </div>
               </CardContent>
             </Card>
           </div>

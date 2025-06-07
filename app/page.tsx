@@ -56,7 +56,7 @@ export default function MainDisplay() {
   // Enhanced auth check with multiple fallback methods
   const checkAuth = async (retryCount = 0) => {
     try {
-      console.log(`Checking auth (attempt ${retryCount + 1})...`)
+      console.log(`Checking auth...`)
 
       // First try normal cookie-based auth
       let response = await fetch("/api/auth/check", {
@@ -86,7 +86,7 @@ export default function MainDisplay() {
 
       if (response.ok) {
         const data = await response.json()
-        console.log("Auth check successful:", data)
+        console.log("Auth check successful")
         setIsAuthenticated(true)
         setUser(data.user)
         return true
@@ -349,13 +349,10 @@ export default function MainDisplay() {
 
                 {/* Auth status with fixed width */}
                 <div className="text-xs text-gray-500 min-w-[150px] text-left">
-                  Auth:{" "}
                   {isCheckingAuth ? (
                     <span className="inline-block">Checking...</span>
                   ) : isAuthenticated ? (
-                    <span className="inline-block whitespace-nowrap">
-                      {user?.name} ({user?.role})
-                    </span>
+                    <span className="inline-block whitespace-nowrap">{user?.name}</span>
                   ) : (
                     <span className="inline-block">Not logged in</span>
                   )}
@@ -512,8 +509,8 @@ export default function MainDisplay() {
                           key={employee.id}
                           className={`p-4 rounded-lg border-2 ${
                             index === systemState.currentUpIndex
-                              ? "border-green-500 bg-green-50"
-                              : "border-gray-200 bg-gray-50"
+                              ? "border-green-500 bg-green-50 dark:bg-green-900/20 dark:border-green-400"
+                              : "border-gray-200 bg-white dark:bg-[#4E2C3C] dark:border-gray-600"
                           }`}
                         >
                           <div className="flex items-center justify-between">
