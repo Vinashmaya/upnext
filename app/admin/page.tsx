@@ -101,6 +101,8 @@ export default function AdminDashboard() {
   const [testEmailSending, setTestEmailSending] = useState(false)
   const [autoRefresh, setAutoRefresh] = useState(true)
   const [isRefreshing, setIsRefreshing] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   // Get initial tab from URL hash
   const getInitialTab = () => {
@@ -123,6 +125,12 @@ export default function AdminDashboard() {
     }
   }
 
+  // Initialize data loading
+  useEffect(() => {
+    console.log("Admin page: Loading initial data...")
+    loadAllData()
+  }, [])
+
   // Auto-refresh functionality
   useEffect(() => {
     if (!autoRefresh) return
@@ -142,6 +150,58 @@ export default function AdminDashboard() {
     return () => clearInterval(interval)
   }, [autoRefresh, activeTab])
 
+  // Listen for hash changes
+  useEffect(() => {
+    const handleHashChange = () => {
+      setActiveTab(getInitialTab())
+    }
+
+    window.addEventListener("hashchange", handleHashChange)
+    return () => window.removeEventListener("hashchange", handleHashChange)
+  }, [])
+
+  const loadAllData = async () => {
+    console.log("Admin page: Loading all data...")
+    setError(null)
+    try {
+      // Load each data type separately to isolate any issues
+      try {
+        await fetchSystemState()
+      } catch (e) {
+        console.error("Error loading system state:", e)
+      }
+
+      try {
+        await fetchAuditLog()
+      } catch (e) {
+        console.error("Error loading audit log:", e)
+      }
+
+      try {
+        await fetchLeadAssignments()
+      } catch (e) {
+        console.error("Error loading lead assignments:", e)
+      }
+
+      try {
+        await fetchNotificationSettings()
+      } catch (e) {
+        console.error("Error loading notification settings:", e)
+      }
+
+      try {
+        await fetchStorageHealth()
+      } catch (e) {
+        console.error("Error loading storage health:", e)
+      }
+    } catch (error) {
+      console.error("Admin page: Error loading data:", error)
+      setError("Failed to load data. Please try refreshing the page.")
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   // Update fetch functions to show refresh state
   const fetchSystemState = async () => {
     try {
@@ -151,11 +211,14 @@ export default function AdminDashboard() {
         headers: {
           "Cache-Control": "no-cache",
         },
+        credentials: "include",
       })
 
       if (response.ok) {
         const data = await response.json()
         setSystemState(data)
+      } else {
+        console.error("Failed to fetch system state:", response.status)
       }
     } catch (error) {
       console.error("Failed to fetch system state:", error)
@@ -171,11 +234,14 @@ export default function AdminDashboard() {
         headers: {
           "Cache-Control": "no-cache",
         },
+        credentials: "include",
       })
 
       if (response.ok) {
         const data = await response.json()
         setAuditLog(data.entries || [])
+      } else {
+        console.error("Failed to fetch audit log:", response.status)
       }
     } catch (error) {
       console.error("Failed to fetch audit log:", error)
@@ -190,11 +256,14 @@ export default function AdminDashboard() {
         headers: {
           "Cache-Control": "no-cache",
         },
+        credentials: "include",
       })
 
       if (response.ok) {
         const data = await response.json()
         setLeadAssignments(data.leads || [])
+      } else {
+        console.error("Failed to fetch lead assignments:", response.status)
       }
     } catch (error) {
       console.error("Failed to fetch lead assignments:", error)
@@ -210,11 +279,14 @@ export default function AdminDashboard() {
         headers: {
           "Cache-Control": "no-cache",
         },
+        credentials: "include",
       })
 
       if (response.ok) {
         const data = await response.json()
         setNotificationSettings(data)
+      } else {
+        console.error("Failed to fetch notification settings:", response.status)
       }
     } catch (error) {
       console.error("Failed to fetch notification settings:", error)
@@ -228,34 +300,19 @@ export default function AdminDashboard() {
         headers: {
           "Cache-Control": "no-cache",
         },
+        credentials: "include",
       })
 
       if (response.ok) {
         const data = await response.json()
         setStorageHealth(data)
+      } else {
+        console.error("Failed to fetch storage health:", response.status)
       }
     } catch (error) {
       console.error("Failed to fetch storage health:", error)
     }
   }
-
-  useEffect(() => {
-    fetchSystemState()
-    fetchAuditLog()
-    fetchLeadAssignments()
-    fetchNotificationSettings()
-    fetchStorageHealth()
-  }, [])
-
-  // Listen for hash changes
-  useEffect(() => {
-    const handleHashChange = () => {
-      setActiveTab(getInitialTab())
-    }
-
-    window.addEventListener("hashchange", handleHashChange)
-    return () => window.removeEventListener("hashchange", handleHashChange)
-  }, [])
 
   const saveSystemState = async (action: string, payload: any = {}) => {
     setIsSaving(true)
@@ -270,6 +327,7 @@ export default function AdminDashboard() {
           source: "admin-dashboard",
           ...payload,
         }),
+        credentials: "include",
       })
 
       if (response.ok) {
@@ -278,6 +336,8 @@ export default function AdminDashboard() {
         setLastSaved(new Date())
         // Refresh audit log after any change
         fetchAuditLog()
+      } else {
+        console.error("Failed to save system state:", response.status)
       }
     } catch (error) {
       console.error("Failed to save:", error)
@@ -297,10 +357,13 @@ export default function AdminDashboard() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify(notificationSettings),
+        credentials: "include",
       })
 
       if (response.ok) {
         setLastSaved(new Date())
+      } else {
+        console.error("Failed to save notification settings:", response.status)
       }
     } catch (error) {
       console.error("Failed to save notification settings:", error)
@@ -317,6 +380,7 @@ export default function AdminDashboard() {
         headers: {
           "Content-Type": "application/json",
         },
+        credentials: "include",
       })
 
       if (response.ok) {
@@ -448,8 +512,44 @@ export default function AdminDashboard() {
 
   const currentEmployee = systemState?.employees[systemState.currentUpIndex] || null
 
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <Navigation />
+        <div className="flex items-center justify-center p-4 mt-16">
+          <div className="text-center">
+            <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+            <p className="text-gray-600">Loading admin dashboard...</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <Navigation />
+        <div className="flex items-center justify-center p-4 mt-16">
+          <Card className="w-full max-w-md">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-red-600">
+                <AlertCircle className="w-5 h-5" />
+                Error Loading Dashboard
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="mb-4">{error}</p>
+              <Button onClick={loadAllData}>Try Again</Button>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    )
+  }
+
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen gradient-bg gradient-bg-dark">
       <Navigation />
 
       <div className="p-4">
@@ -457,8 +557,8 @@ export default function AdminDashboard() {
           {/* Header */}
           <div className="mb-8 flex items-center justify-between mt-8">
             <div>
-              <h1 className="text-3xl font-bold text-gray-800 mb-2">Admin Dashboard</h1>
-              <p className="text-gray-600">Manage your sales team rotation</p>
+              <h1 className="text-3xl font-bold text-gradient mb-2">Admin Dashboard</h1>
+              <p className="text-muted-foreground">Manage your sales team rotation</p>
             </div>
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-2">
@@ -468,18 +568,7 @@ export default function AdminDashboard() {
                   {isRefreshing && <div className="inline-block w-2 h-2 bg-blue-500 rounded-full animate-pulse ml-1" />}
                 </Label>
               </div>
-              <Button
-                onClick={() => {
-                  fetchSystemState()
-                  fetchAuditLog()
-                  fetchLeadAssignments()
-                  fetchNotificationSettings()
-                  fetchStorageHealth()
-                }}
-                variant="outline"
-                size="sm"
-                disabled={isRefreshing}
-              >
+              <Button onClick={loadAllData} variant="outline" size="sm" disabled={isRefreshing}>
                 <RefreshCw className={`w-4 h-4 mr-2 ${isRefreshing ? "animate-spin" : ""}`} />
                 Refresh
               </Button>
@@ -488,7 +577,7 @@ export default function AdminDashboard() {
           </div>
 
           {/* Current Status */}
-          <Card className="mb-6 border-l-4 border-l-blue-500">
+          <Card className="mb-6 border-l-4 border-l-primary card-hover">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Eye className="w-5 h-5" />
@@ -499,7 +588,7 @@ export default function AdminDashboard() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-gray-600">Currently Up:</p>
-                  <p className="text-2xl font-bold text-blue-600">{currentEmployee?.name || "No one in queue"}</p>
+                  <p className="text-2xl font-bold text-gradient">{currentEmployee?.name || "No one in queue"}</p>
                 </div>
                 <Button
                   onClick={cycleUp}
@@ -1111,7 +1200,7 @@ export default function AdminDashboard() {
                     </div>
                     <div>
                       <Label className="text-sm font-medium">Data Persistence</Label>
-                      <div className="text-lg">File System</div>
+                      <div className="text-lg">Upstash Redis</div>
                     </div>
                     <div>
                       <Label className="text-sm font-medium">Auto-refresh</Label>

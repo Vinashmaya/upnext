@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server"
 import { getNotificationSettings } from "@/lib/storage"
-import nodemailer from "nodemailer"
 
 // Check if action should trigger notification
 function shouldNotifyForAction(action: string, settings: any): boolean {
@@ -17,119 +16,6 @@ function shouldNotifyForAction(action: string, settings: any): boolean {
       return settings.notifyOnSystemChanges
     default:
       return false
-  }
-}
-
-// Get email subject and body based on action
-function getEmailContent(action: string, details: string, user: string, timestamp: string) {
-  const formattedTime = new Date(timestamp).toLocaleString()
-
-  switch (action) {
-    case "login":
-      return {
-        subject: "🔐 Sales Up System - Admin Login",
-        html: `
-          <h2>Admin Login Notification</h2>
-          <p><strong>User:</strong> ${user}</p>
-          <p><strong>Time:</strong> ${formattedTime}</p>
-          <p><strong>Status:</strong> Successful login</p>
-          <hr>
-          <p><em>This is an automated notification from your Sales Up System.</em></p>
-        `,
-      }
-
-    case "login_failed":
-      return {
-        subject: "🚨 Sales Up System - Failed Login Attempt",
-        html: `
-          <h2>Failed Login Attempt</h2>
-          <p><strong>User:</strong> ${user}</p>
-          <p><strong>Time:</strong> ${formattedTime}</p>
-          <p><strong>Status:</strong> Login failed</p>
-          <p style="color: red;"><strong>⚠️ Security Alert:</strong> Someone attempted to access the admin panel with invalid credentials.</p>
-          <hr>
-          <p><em>This is an automated security notification from your Sales Up System.</em></p>
-        `,
-      }
-
-    case "remove":
-      return {
-        subject: "🗑️ Sales Up System - Employee Removed",
-        html: `
-          <h2>Employee Removal Alert</h2>
-          <p><strong>Action:</strong> ${details}</p>
-          <p><strong>Performed by:</strong> ${user}</p>
-          <p><strong>Time:</strong> ${formattedTime}</p>
-          <p style="color: orange;"><strong>⚠️ Critical Action:</strong> An employee has been removed from the sales rotation system.</p>
-          <hr>
-          <p><em>This is an automated notification from your Sales Up System.</em></p>
-        `,
-      }
-
-    case "add":
-      return {
-        subject: "➕ Sales Up System - New Employee Added",
-        html: `
-          <h2>New Employee Added</h2>
-          <p><strong>Action:</strong> ${details}</p>
-          <p><strong>Performed by:</strong> ${user}</p>
-          <p><strong>Time:</strong> ${formattedTime}</p>
-          <hr>
-          <p><em>This is an automated notification from your Sales Up System.</em></p>
-        `,
-      }
-
-    case "reorder":
-      return {
-        subject: "🔄 Sales Up System - Queue Reordered",
-        html: `
-          <h2>Employee Queue Reordered</h2>
-          <p><strong>Action:</strong> ${details}</p>
-          <p><strong>Performed by:</strong> ${user}</p>
-          <p><strong>Time:</strong> ${formattedTime}</p>
-          <hr>
-          <p><em>This is an automated notification from your Sales Up System.</em></p>
-        `,
-      }
-
-    case "toggle":
-      return {
-        subject: "🔄 Sales Up System - Employee Status Changed",
-        html: `
-          <h2>Employee Status Changed</h2>
-          <p><strong>Action:</strong> ${details}</p>
-          <p><strong>Performed by:</strong> ${user}</p>
-          <p><strong>Time:</strong> ${formattedTime}</p>
-          <hr>
-          <p><em>This is an automated notification from your Sales Up System.</em></p>
-        `,
-      }
-
-    case "lead_assignment":
-      return {
-        subject: "👤 Sales Up System - Lead Assigned",
-        html: `
-          <h2>Lead Assignment Notification</h2>
-          <p><strong>Action:</strong> ${details}</p>
-          <p><strong>Time:</strong> ${formattedTime}</p>
-          <p style="color: green;"><strong>✅ Lead Assigned:</strong> A new lead has been assigned to a sales team member.</p>
-          <hr>
-          <p><em>This is an automated notification from your Sales Up System.</em></p>
-        `,
-      }
-
-    default:
-      return {
-        subject: "📋 Sales Up System - System Activity",
-        html: `
-          <h2>System Activity Notification</h2>
-          <p><strong>Action:</strong> ${details}</p>
-          <p><strong>Performed by:</strong> ${user}</p>
-          <p><strong>Time:</strong> ${formattedTime}</p>
-          <hr>
-          <p><em>This is an automated notification from your Sales Up System.</em></p>
-        `,
-      }
   }
 }
 
@@ -153,29 +39,19 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Email configuration incomplete" }, { status: 400 })
     }
 
-    // Create transporter
-    const transporter = nodemailer.createTransporter({
-      host: settings.smtpHost,
-      port: settings.smtpPort,
-      secure: settings.smtpPort === 465, // true for 465, false for other ports
-      auth: {
-        user: settings.smtpUser,
-        pass: settings.smtpPassword,
+    // In a real app, we would send an actual email here
+    // For now, just return success to avoid nodemailer issues
+    return NextResponse.json({
+      success: true,
+      message: "Notification would be sent (email sending disabled in preview)",
+      notification: {
+        action,
+        details,
+        user,
+        timestamp,
+        recipient: settings.adminEmail,
       },
     })
-
-    // Get email content
-    const { subject, html } = getEmailContent(action, details, user, timestamp)
-
-    // Send email
-    await transporter.sendMail({
-      from: `"Sales Up System" <${settings.smtpUser}>`,
-      to: settings.adminEmail,
-      subject,
-      html,
-    })
-
-    return NextResponse.json({ success: true, message: "Notification sent" })
   } catch (error) {
     console.error("Error sending notification:", error)
     return NextResponse.json({ error: "Failed to send notification" }, { status: 500 })

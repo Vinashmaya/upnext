@@ -1,20 +1,23 @@
 import { NextResponse } from "next/server"
-import { addAuditLogEntry } from "@/lib/storage"
+import { addAuditLogEntry, getSessionFromCookies } from "@/lib/storage"
 
 export async function POST() {
   try {
+    // Get current session
+    const session = await getSessionFromCookies()
+
     // Log the logout
     await addAuditLogEntry({
       action: "logout",
-      user: "admin",
+      user: session?.username || "unknown",
       source: "navigation",
-      details: "Admin logged out",
+      details: `${session?.name || "User"} logged out`,
     })
 
     const response = NextResponse.json({ success: true })
 
-    // Clear the session cookie
-    response.cookies.set("admin-session", "", {
+    // Clear the auth token cookie
+    response.cookies.set("auth-token", "", {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "strict",
