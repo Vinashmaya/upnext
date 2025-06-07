@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { getUserByUsername, createSession, addAuditLogEntry } from "@/lib/storage"
+import { getAdminCredentials, addAuditLogEntry } from "@/lib/storage"
 
 export async function POST(request: Request) {
   try {
@@ -7,55 +7,29 @@ export async function POST(request: Request) {
 
     console.log("Login attempt for username:", username)
 
-    // Get user from Redis
-    const user = await getUserByUsername(username)
+    // Get admin credentials from Redis
+    const adminCredentials = await getAdminCredentials()
+    console.log("Loaded credentials for username:", adminCredentials.username)
 
-    if (!user) {
-      console.log("Login failed - user not found")
+    if (username === adminCredentials.username && password === adminCredentials.password) {
+      console.log("Login successful")
 
-      // Log failed login attempt
-      await addAuditLogEntry({
-        action: "login_failed",
-        user: username || "unknown",
-        source: "login-page",
-        details: "Failed login attempt - user not found",
-      })
+      // Log successful login (don't fail if this fails)
+      try {
+        await addAuditLogEntry({
+          action: "login",
+          user: username,
+          source: "login-page",
+          details: "Successful admin login",
+        })
+      } catch (auditError) {
+        console.error("Failed to log audit entry:", auditError)
+      }
 
-      return NextResponse.json({ error: "Invalid credentials" }, { status: 401 })
-    }
+      const response = NextResponse.json({ success: true })
 
-    // Check password (in production, use proper password hashing)
-    if (password === user.password) {
-      console.log("Login successful, creating session...")
-
-      // Create session token
-      const token = await createSession(user)
-      console.log("Session token created successfully")
-
-      // Log successful login
-      await addAuditLogEntry({
-        action: "login",
-        user: username,
-        source: "login-page",
-        details: `Successful login as ${user.role}`,
-      })
-
-      const response = NextResponse.json({
-        success: true,
-        user: {
-          id: user.id,
-          username: user.username,
-          name: user.name,
-          role: user.role,
-          isActive: user.isActive,
-        },
-        token, // Also return token for localStorage fallback
-      })
-
-      // Set cookie with explicit settings
-      response.cookies.set({
-        name: "auth-token",
-        value: token,
+      // Set cookie
+      response.cookies.set("admin-session", "authenticated", {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
         sameSite: "lax",
@@ -63,20 +37,28 @@ export async function POST(request: Request) {
         path: "/",
       })
 
-      console.log("Cookie set successfully")
       return response
     } else {
-      console.log("Login failed - invalid password")
+      console.log("Login failed - invalid credentials")
 
-      // Log failed login attempt
-      await addAuditLogEntry({
-        action: "login_failed",
-        user: username || "unknown",
-        source: "login-page",
-        details: "Failed login attempt - invalid password",
-      })
+      // Log failed login attempt (don't fail if this fails)
+      try {
+        await addAuditLogEntry({
+          action: "login_failed",
+          user: username || "unknown",
+          source: "login-page",
+          details: "Failed login attempt",
+        })
+      } catch (auditError) {
+        console.error("Failed to log audit entry:", auditError)
+      }
 
-      return NextResponse.json({ error: "Invalid credentials" }, { status: 401 })
+      return NextResponse.json(
+        {
+          error: "Invalid credentials",
+        },
+        { status: 401 },
+      )
     }
   } catch (error) {
     console.error("Login error:", error)
